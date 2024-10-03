@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+
 interface TodoItemProps {
     id: string;
     content: string;
@@ -6,6 +7,8 @@ interface TodoItemProps {
     description?: string;
     dueDate?: string;
     tags?: string[];
+    categoryId: string;
+    categories: { id: string; title: string }[];
     onComplete: (id: string) => void;
     onUpdate: (id: string, updates: Partial<Todo>) => void;
     onDelete: (id: string) => void;
@@ -19,6 +22,7 @@ export interface Todo {
     description?: string;
     dueDate?: string;
     tags?: string[];
+    categoryId: string;
 }
 
 const TodoItem: React.FC<TodoItemProps> = ({
@@ -28,6 +32,8 @@ const TodoItem: React.FC<TodoItemProps> = ({
     description,
     dueDate,
     tags,
+    categoryId,
+    categories,
     onComplete,
     onUpdate,
     onDelete,
@@ -38,13 +44,12 @@ const TodoItem: React.FC<TodoItemProps> = ({
     const [editDescription, setEditDescription] = useState(description || "");
     const [editDueDate, setEditDueDate] = useState(dueDate || "");
     const [editTags, setEditTags] = useState(tags?.join(", ") || "");
+    const [editCategoryId, setEditCategoryId] = useState(categoryId);
+    const [editIsCompleted, setEditIsCompleted] = useState(isCompleted);
 
-    const handleComplete = () => {
+    const handleComplete = (e: React.MouseEvent) => {
+        e.stopPropagation();
         onComplete(id);
-        showAlert(
-            `Todo marked as ${isCompleted ? "incomplete" : "complete"}`,
-            "success"
-        );
     };
 
     const openModal = () => {
@@ -64,45 +69,46 @@ const TodoItem: React.FC<TodoItemProps> = ({
                 .split(",")
                 .map((tag) => tag.trim())
                 .filter((tag) => tag !== ""),
+            categoryId: editCategoryId,
+            isCompleted: editIsCompleted,
         });
         closeModal();
-        showAlert("Todo updated successfully", "success");
     };
 
     const handleDelete = () => {
         onDelete(id);
         closeModal();
-        showAlert("Todo deleted successfully", "success");
     };
 
     return (
         <>
             <div
                 className={`
-        bg-white 
-        p-4 
-        mb-3 
-        rounded-lg 
-        border border-slate-200
-        shadow-sm 
-        hover:shadow-md 
-        hover:border-indigo-200
-        transition-all 
-        duration-200 
-        cursor-pointer 
-        ${isCompleted ? "bg-green-50" : ""}
-    `}
+                p-4 
+                mb-3 
+                rounded-lg 
+                border
+                shadow-sm 
+                hover:shadow-md 
+                transition-all 
+                duration-200 
+                cursor-pointer 
+                ${isCompleted
+                        ? "bg-green-100 border-green-300 hover:border-green-400"
+                        : "bg-white border-slate-200 hover:border-indigo-200"
+                    }
+            `}
                 onClick={openModal}
             >
                 <div className="flex items-center mb-2">
                     <div
                         className={`w-6 h-6 border-2 rounded-full mr-3 flex items-center justify-center cursor-pointer transition-colors duration-200 ${isCompleted
-                            ? "bg-indigo-500 border-indigo-500"
-                            : "border-gray-300 hover:border-indigo-500"
+                                ? "bg-green-500 border-green-500"
+                                : "border-gray-300 hover:border-indigo-500"
                             }`}
-                        onClick={(e: React.MouseEvent) => {
+                        onClick={(e) => {
                             e.stopPropagation();
-                            handleComplete();
+                            handleComplete(e);
                         }}
                     >
                         {isCompleted && (
@@ -122,13 +128,13 @@ const TodoItem: React.FC<TodoItemProps> = ({
                         )}
                     </div>
                     <span
-                        className={`text-lg ${isCompleted ? "line-through text-gray-400" : "text-gray-700"
+                        className={`text-lg ${isCompleted ? "line-through text-gray-500" : "text-gray-700"
                             }`}
                     >
                         {content}
                     </span>
                 </div>
-                {(description || dueDate || tags?.length) && (
+                {(description || dueDate || (tags && tags.length > 0)) && (
                     <div className="ml-9 text-sm text-gray-600">
                         {description && <p className="mb-1 line-clamp-2">{description}</p>}
                         {dueDate && (
@@ -154,7 +160,10 @@ const TodoItem: React.FC<TodoItemProps> = ({
                                 {tags.map((tag, index) => (
                                     <span
                                         key={index}
-                                        className="bg-indigo-100 text-indigo-800 px-2 py-1 rounded-full text-xs"
+                                        className={`px-2 py-1 rounded-full text-xs ${isCompleted
+                                                ? "bg-green-200 text-green-800"
+                                                : "bg-indigo-100 text-indigo-800"
+                                            }`}
                                     >
                                         {tag}
                                     </span>
@@ -183,6 +192,17 @@ const TodoItem: React.FC<TodoItemProps> = ({
                             placeholder="Description"
                             rows={3}
                         />
+                        <select
+                            value={editCategoryId}
+                            onChange={(e) => setEditCategoryId(e.target.value)}
+                            className="border border-gray-300 p-3 w-full mb-3 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all duration-200"
+                        >
+                            {categories.map((category) => (
+                                <option key={category.id} value={category.id}>
+                                    {category.title}
+                                </option>
+                            ))}
+                        </select>
                         <input
                             type="date"
                             value={editDueDate}
@@ -196,6 +216,16 @@ const TodoItem: React.FC<TodoItemProps> = ({
                             className="border border-gray-300 p-3 w-full mb-4 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all duration-200"
                             placeholder="Tags (comma-separated)"
                         />
+                        <div className="flex items-center mb-4">
+                            <input
+                                type="checkbox"
+                                id="markAsDone"
+                                checked={editIsCompleted}
+                                onChange={(e) => setEditIsCompleted(e.target.checked)}
+                                className="mr-2"
+                            />
+                            <label htmlFor="markAsDone">Mark as done</label>
+                        </div>
                         <div className="flex justify-between">
                             <button
                                 onClick={handleUpdate}

@@ -1,13 +1,14 @@
 import React, { useState, useMemo, useRef } from 'react';
 import { DragDropContext, Droppable, Draggable, DropResult } from 'react-beautiful-dnd';
-import TodoItem, { Todo } from './TodoItem';
 import Alert from './Alert';
+import TodoItem, { Todo } from './TodoItem';
 
 interface Category {
     id: string;
     title: string;
     todos: Todo[];
 }
+
 
 const KanbanBoard: React.FC = () => {
     const [categories, setCategories] = useState<Category[]>([]);
@@ -141,20 +142,32 @@ const KanbanBoard: React.FC = () => {
         }));
     };
 
-    const handleTodoUpdate = (categoryId: string, todoId: string, updates: Partial<Todo>) => {
+    const handleTodoUpdate = (currentCategoryId: string, todoId: string, updates: Partial<Todo>) => {
         setCategories(categories.map(cat => {
-            if (cat.id === categoryId) {
-                return {
-                    ...cat,
-                    todos: cat.todos.map(todo =>
-                        todo.id === todoId ? { ...todo, ...updates } : todo
-                    )
-                };
+            if (cat.id === currentCategoryId) {
+                const updatedTodos = cat.todos.map(todo =>
+                    todo.id === todoId ? { ...todo, ...updates } : todo
+                );
+
+                if (updates.categoryId && updates.categoryId !== currentCategoryId) {
+                    // Remove the todo from the current category
+                    return { ...cat, todos: updatedTodos.filter(todo => todo.id !== todoId) };
+                }
+
+                return { ...cat, todos: updatedTodos };
+            } else if (updates.categoryId && updates.categoryId === cat.id) {
+                // Add the todo to the new category
+                const movedTodo = categories
+                    .find(c => c.id === currentCategoryId)?.todos
+                    .find(t => t.id === todoId);
+                if (movedTodo) {
+                    return { ...cat, todos: [...cat.todos, { ...movedTodo, ...updates }] };
+                }
             }
             return cat;
         }));
     };
-
+    
     const handleTodoDelete = (categoryId: string, todoId: string) => {
         setCategories(categories.map(cat => {
             if (cat.id === categoryId) {
@@ -178,7 +191,8 @@ const KanbanBoard: React.FC = () => {
                         {
                             id: Date.now().toString(),
                             content: newTodoContent,
-                            isCompleted: false
+                            isCompleted: false,
+                            categoryId: categoryId,
                         },
                         ...cat.todos,
                     ],
@@ -282,6 +296,8 @@ const KanbanBoard: React.FC = () => {
                                                         >
                                                             <TodoItem
                                                                 {...todo}
+                                                                categoryId={category.id}
+                                                                categories={categories}
                                                                 onComplete={() => handleTodoComplete(category.id, todo.id)}
                                                                 onUpdate={(id, updates) => handleTodoUpdate(category.id, id, updates)}
                                                                 onDelete={(id) => handleTodoDelete(category.id, id)}

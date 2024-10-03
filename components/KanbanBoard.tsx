@@ -188,8 +188,9 @@ const KanbanBoard: React.FC = () => {
 
     return (
         <div className="flex flex-col h-screen bg-gradient-to-br from-indigo-100 to-purple-100">
-            <header className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white p-6 shadow-lg">
-                <div className="max-w-7xl mx-auto flex justify-between items-center">
+
+            <header className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white p-6 shadow-lg w-screen">
+                <div className="flex justify-between items-center">
                     <h1 className="text-3xl font-bold tracking-tight">Zero Kanban</h1>
                     <div className="relative">
                         <input
@@ -220,7 +221,7 @@ const KanbanBoard: React.FC = () => {
                                     <div
                                         {...provided.droppableProps}
                                         ref={provided.innerRef}
-                                        className="bg-white rounded-lg shadow-md p-4 min-w-[350px] flex flex-col h-full"
+                                        className="bg-white rounded-lg shadow-md p-4 min-w-[400px] flex flex-col h-full"
                                     >
                                         <h2
                                             className="font-semibold mb-4 text-xl text-gray-800 cursor-pointer hover:text-indigo-600 transition duration-300 ease-in-out"

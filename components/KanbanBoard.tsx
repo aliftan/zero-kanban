@@ -37,9 +37,10 @@ const KanbanBoard: React.FC = () => {
             ...category,
             todos: category.todos.filter(todo =>
                 todo.content.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                todo.tags?.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase()))
+                (todo.description && todo.description.toLowerCase().includes(searchTerm.toLowerCase())) ||
+                (todo.tags && todo.tags.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase())))
             )
-        }));
+        })).filter(category => category.todos.length > 0);
     }, [categories, searchTerm]);
 
     const onDragEnd = (result: DropResult) => {
@@ -167,7 +168,7 @@ const KanbanBoard: React.FC = () => {
             return cat;
         }));
     };
-    
+
     const handleTodoDelete = (categoryId: string, todoId: string) => {
         setCategories(categories.map(cat => {
             if (cat.id === categoryId) {
@@ -208,24 +209,16 @@ const KanbanBoard: React.FC = () => {
     return (
         <div className="flex flex-col h-screen bg-gradient-to-br from-indigo-100 to-purple-100">
             <header className="bg-indigo-600 text-white p-4 shadow-lg">
-                <div className="container mx-auto flex justify-between items-center">
+                <div className="mx-auto flex justify-between items-center">
                     <h1 className="text-3xl font-bold">Zero Kanban</h1>
-                    <div className="flex items-center space-x-4">
-                        <div className="relative">
-                            <input
-                                type="text"
-                                placeholder="Search todos or tags..."
-                                value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
-                                className="px-4 py-2 rounded-full text-gray-800 bg-white focus:outline-none focus:ring-2 focus:ring-white transition duration-300 ease-in-out w-64"
-                            />
-                        </div>
-                        <button
-                            onClick={openAddModal}
-                            className="bg-white text-indigo-600 px-3 py-1 rounded-full font-bold text-xl hover:bg-opacity-90 transition duration-300 ease-in-out"
-                        >
-                            +
-                        </button>
+                    <div className="relative">
+                        <input
+                            type="text"
+                            placeholder="Search todos or tags..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            className="px-4 py-2 rounded-full text-gray-800 bg-white focus:outline-none focus:ring-2 focus:ring-white transition duration-300 ease-in-out w-64"
+                        />
                     </div>
                 </div>
             </header>

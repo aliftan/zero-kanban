@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import { DragDropContext, Droppable, Draggable, DropResult } from 'react-beautiful-dnd';
 import TodoItem, { Todo } from './TodoItem';
 import Alert from './Alert';
@@ -12,17 +12,22 @@ interface Category {
 const KanbanBoard: React.FC = () => {
     const [categories, setCategories] = useState<Category[]>([]);
     const [newTodoContent, setNewTodoContent] = useState('');
-    const [activeCategoryId, setActiveCategoryId] = useState('');
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [modalMode, setModalMode] = useState<'add' | 'edit'>('add');
     const [editingCategory, setEditingCategory] = useState<Category | null>(null);
     const [newCategoryTitle, setNewCategoryTitle] = useState('');
     const [alert, setAlert] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
+    const [showAddTodo, setShowAddTodo] = useState<{ [key: string]: boolean }>({});
+    const inputRef = useRef<HTMLInputElement>(null);
+
+    const toggleAddTodo = (categoryId: string) => {
+        setShowAddTodo(prev => ({ ...prev, [categoryId]: !prev[categoryId] }));
+    };
 
     const showAlert = (message: string, type: 'success' | 'error') => {
         setAlert({ message, type });
-        setTimeout(() => setAlert(null), 3000); // Hide alert after 3 seconds
+        setTimeout(() => setAlert(null), 3000);
     };
 
     const filteredCategories = useMemo(() => {
@@ -170,44 +175,43 @@ const KanbanBoard: React.FC = () => {
                 return {
                     ...cat,
                     todos: [
-                        ...cat.todos,
                         {
                             id: Date.now().toString(),
                             content: newTodoContent,
                             isCompleted: false
                         },
+                        ...cat.todos,
                     ],
                 };
             }
             return cat;
         }));
         setNewTodoContent('');
-        setActiveCategoryId('');
+        setShowAddTodo(prev => ({ ...prev, [categoryId]: false }));
         showAlert('Todo added successfully!', 'success');
     };
 
     return (
         <div className="flex flex-col h-screen bg-gradient-to-br from-indigo-100 to-purple-100">
-
-            <header className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white p-6 shadow-lg w-screen">
-                <div className="flex justify-between items-center">
-                    <h1 className="text-3xl font-bold tracking-tight">Zero Kanban</h1>
-                    <div className="relative">
-                        <input
-                            type="text"
-                            placeholder="Search todos or tags..."
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                            className="px-4 py-2 rounded-full text-gray-800 bg-white bg-opacity-90 focus:outline-none focus:ring-2 focus:ring-white focus:bg-opacity-100 transition duration-300 ease-in-out w-64"
-                        />
-                        {searchTerm && (
-                            <button
-                                onClick={() => setSearchTerm('')}
-                                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700"
-                            >
-                                ×
-                            </button>
-                        )}
+            <header className="bg-indigo-600 text-white p-4 shadow-lg">
+                <div className="container mx-auto flex justify-between items-center">
+                    <h1 className="text-3xl font-bold">Zero Kanban</h1>
+                    <div className="flex items-center space-x-4">
+                        <div className="relative">
+                            <input
+                                type="text"
+                                placeholder="Search todos or tags..."
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                className="px-4 py-2 rounded-full text-gray-800 bg-white focus:outline-none focus:ring-2 focus:ring-white transition duration-300 ease-in-out w-64"
+                            />
+                        </div>
+                        <button
+                            onClick={openAddModal}
+                            className="bg-white text-indigo-600 px-3 py-1 rounded-full font-bold text-xl hover:bg-opacity-90 transition duration-300 ease-in-out"
+                        >
+                            +
+                        </button>
                     </div>
                 </div>
             </header>
@@ -221,14 +225,52 @@ const KanbanBoard: React.FC = () => {
                                     <div
                                         {...provided.droppableProps}
                                         ref={provided.innerRef}
-                                        className="bg-white rounded-lg shadow-md p-4 min-w-[400px] flex flex-col h-full"
+                                        className="bg-white rounded-lg shadow-md p-4 min-w-[350px] flex flex-col h-full"
                                     >
-                                        <h2
-                                            className="font-semibold mb-4 text-xl text-gray-800 cursor-pointer hover:text-indigo-600 transition duration-300 ease-in-out"
-                                            onClick={() => openEditModal(category)}
-                                        >
-                                            {category.title}
-                                        </h2>
+                                        <div className="flex justify-between items-center mb-4">
+                                            <h2 className="font-semibold text-xl text-gray-800">{category.title}</h2>
+                                            <button
+                                                onClick={() => toggleAddTodo(category.id)}
+                                                className="w-6 h-6 border border-indigo-600 rounded flex items-center justify-center text-indigo-600 hover:bg-indigo-100 focus:outline-none transition-colors duration-200"
+                                            >
+                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                                                </svg>
+                                            </button>
+                                        </div>
+
+                                        {showAddTodo[category.id] && (
+                                            <div className="mb-4">
+                                                <input
+                                                    ref={inputRef}
+                                                    type="text"
+                                                    value={newTodoContent}
+                                                    onChange={(e) => setNewTodoContent(e.target.value)}
+                                                    placeholder="New todo content"
+                                                    className="border border-gray-300 p-2 w-full mb-2 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 transition duration-300 ease-in-out"
+                                                    onKeyPress={(e) => {
+                                                        if (e.key === 'Enter') {
+                                                            addTodo(category.id);
+                                                        }
+                                                    }}
+                                                />
+                                                <div className="flex justify-between space-x-2">
+                                                    <button
+                                                        onClick={() => toggleAddTodo(category.id)}
+                                                        className="bg-gray-200 hover:bg-gray-300 text-gray-800 px-4 py-2 rounded-md transition duration-300 ease-in-out flex-1"
+                                                    >
+                                                        Cancel
+                                                    </button>
+                                                    <button
+                                                        onClick={() => addTodo(category.id)}
+                                                        className="bg-indigo-500 hover:bg-indigo-600 text-white px-4 py-2 rounded-md transition duration-300 ease-in-out flex-1"
+                                                    >
+                                                        Add Todo
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        )}
+
                                         <div className="flex-grow overflow-y-auto">
                                             {category.todos.map((todo, index) => (
                                                 <Draggable key={todo.id} draggableId={todo.id} index={index}>
@@ -251,44 +293,16 @@ const KanbanBoard: React.FC = () => {
                                             ))}
                                         </div>
                                         {provided.placeholder}
-                                        {!searchTerm && (
-                                            category.id === activeCategoryId ? (
-                                                <div className="mt-4">
-                                                    <input
-                                                        type="text"
-                                                        value={newTodoContent}
-                                                        onChange={(e) => setNewTodoContent(e.target.value)}
-                                                        placeholder="New todo content"
-                                                        className="border border-gray-300 p-2 w-full mb-2 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 transition duration-300 ease-in-out"
-                                                    />
-                                                    <button
-                                                        onClick={() => addTodo(category.id)}
-                                                        className="bg-indigo-500 hover:bg-indigo-600 text-white p-2 rounded-md w-full transition duration-300 ease-in-out"
-                                                    >
-                                                        Add Todo
-                                                    </button>
-                                                </div>
-                                            ) : (
-                                                <button
-                                                    onClick={() => setActiveCategoryId(category.id)}
-                                                    className="mt-4 bg-indigo-500 hover:bg-indigo-600 text-white p-2 rounded-md w-full transition duration-300 ease-in-out"
-                                                >
-                                                    + Add Todo
-                                                </button>
-                                            )
-                                        )}
                                     </div>
                                 )}
                             </Droppable>
                         ))}
-                        {!searchTerm && (
-                            <button
-                                onClick={openAddModal}
-                                className="bg-white hover:bg-gray-50 text-indigo-600 font-semibold p-4 rounded-lg min-w-[350px] h-16 flex items-center justify-center self-start shadow-md transition duration-300 ease-in-out"
-                            >
-                                + Add Board
-                            </button>
-                        )}
+                        <button
+                            onClick={openAddModal}
+                            className="bg-white hover:bg-gray-50 text-indigo-600 font-semibold p-4 rounded-lg min-w-[300px] h-16 flex items-center justify-center self-start shadow-md transition duration-300 ease-in-out"
+                        >
+                            + Add Board
+                        </button>
                     </div>
                 </DragDropContext>
             </main>

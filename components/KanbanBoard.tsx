@@ -187,17 +187,17 @@ const KanbanBoard: React.FC = () => {
     };
 
     return (
-        <div className="flex flex-col h-screen bg-gray-100">
-            <header className="bg-blue-600 text-white p-4">
-                <div className="flex justify-between items-center">
-                    <h1 className="text-2xl font-bold">Zero Kanban</h1>
+        <div className="flex flex-col h-screen bg-gradient-to-br from-indigo-100 to-purple-100">
+            <header className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white p-6 shadow-lg">
+                <div className="max-w-7xl mx-auto flex justify-between items-center">
+                    <h1 className="text-3xl font-bold tracking-tight">Zero Kanban</h1>
                     <div className="relative">
                         <input
                             type="text"
                             placeholder="Search todos or tags..."
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
-                            className="px-4 py-2 rounded-full text-black focus:outline-none focus:ring-2 focus:ring-white"
+                            className="px-4 py-2 rounded-full text-gray-800 bg-white bg-opacity-90 focus:outline-none focus:ring-2 focus:ring-white focus:bg-opacity-100 transition duration-300 ease-in-out w-64"
                         />
                         {searchTerm && (
                             <button
@@ -211,19 +211,19 @@ const KanbanBoard: React.FC = () => {
                 </div>
             </header>
 
-            <main className="flex-grow overflow-x-auto">
+            <main className="flex-grow overflow-x-auto p-6">
                 <DragDropContext onDragEnd={onDragEnd}>
-                    <div className="flex h-full p-4 space-x-4">
+                    <div className="flex h-full space-x-6">
                         {filteredCategories.map((category) => (
                             <Droppable key={category.id} droppableId={category.id}>
                                 {(provided) => (
                                     <div
                                         {...provided.droppableProps}
                                         ref={provided.innerRef}
-                                        className="bg-gray-200 p-4 rounded-lg min-w-[350px] flex flex-col h-full"
+                                        className="bg-white rounded-lg shadow-md p-4 min-w-[350px] flex flex-col h-full"
                                     >
                                         <h2
-                                            className="font-bold mb-4 text-lg cursor-pointer"
+                                            className="font-semibold mb-4 text-xl text-gray-800 cursor-pointer hover:text-indigo-600 transition duration-300 ease-in-out"
                                             onClick={() => openEditModal(category)}
                                         >
                                             {category.title}
@@ -252,22 +252,25 @@ const KanbanBoard: React.FC = () => {
                                         {provided.placeholder}
                                         {!searchTerm && (
                                             category.id === activeCategoryId ? (
-                                                <div className="mt-2">
+                                                <div className="mt-4">
                                                     <input
                                                         type="text"
                                                         value={newTodoContent}
                                                         onChange={(e) => setNewTodoContent(e.target.value)}
                                                         placeholder="New todo content"
-                                                        className="border p-2 w-full mb-2 rounded"
+                                                        className="border border-gray-300 p-2 w-full mb-2 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 transition duration-300 ease-in-out"
                                                     />
-                                                    <button onClick={() => addTodo(category.id)} className="bg-green-500 hover:bg-green-600 text-white p-2 rounded w-full">
+                                                    <button
+                                                        onClick={() => addTodo(category.id)}
+                                                        className="bg-indigo-500 hover:bg-indigo-600 text-white p-2 rounded-md w-full transition duration-300 ease-in-out"
+                                                    >
                                                         Add Todo
                                                     </button>
                                                 </div>
                                             ) : (
                                                 <button
                                                     onClick={() => setActiveCategoryId(category.id)}
-                                                    className="bg-green-500 hover:bg-green-600 text-white p-2 rounded w-full mt-2"
+                                                    className="mt-4 bg-indigo-500 hover:bg-indigo-600 text-white p-2 rounded-md w-full transition duration-300 ease-in-out"
                                                 >
                                                     + Add Todo
                                                 </button>
@@ -280,7 +283,7 @@ const KanbanBoard: React.FC = () => {
                         {!searchTerm && (
                             <button
                                 onClick={openAddModal}
-                                className="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold p-4 rounded min-w-[300px] h-12 flex items-center justify-center self-start"
+                                className="bg-white hover:bg-gray-50 text-indigo-600 font-semibold p-4 rounded-lg min-w-[350px] h-16 flex items-center justify-center self-start shadow-md transition duration-300 ease-in-out"
                             >
                                 + Add Board
                             </button>
@@ -290,9 +293,9 @@ const KanbanBoard: React.FC = () => {
             </main>
 
             {isModalOpen && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
-                    <div className="bg-white p-6 rounded-lg w-96">
-                        <h2 className="text-xl font-bold mb-4">
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                    <div className="bg-white p-8 rounded-lg w-96 shadow-xl">
+                        <h2 className="text-2xl font-bold mb-6 text-gray-800">
                             {modalMode === 'add' ? 'Add New Board' : 'Edit Board'}
                         </h2>
                         <input
@@ -300,18 +303,27 @@ const KanbanBoard: React.FC = () => {
                             value={newCategoryTitle}
                             onChange={(e) => setNewCategoryTitle(e.target.value)}
                             placeholder="Board name"
-                            className="border p-2 w-full mb-4 rounded"
+                            className="border border-gray-300 p-3 w-full mb-6 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 transition duration-300 ease-in-out"
                         />
                         <div className="flex justify-between">
-                            <button onClick={handleModalSubmit} className="bg-blue-500 hover:bg-blue-600 text-white p-2 rounded">
+                            <button
+                                onClick={handleModalSubmit}
+                                className="bg-indigo-500 hover:bg-indigo-600 text-white px-4 py-2 rounded-md transition duration-300 ease-in-out"
+                            >
                                 {modalMode === 'add' ? 'Add' : 'Update'}
                             </button>
                             {modalMode === 'edit' && editingCategory && (
-                                <button onClick={() => deleteCategory(editingCategory.id)} className="bg-red-500 hover:bg-red-600 text-white p-2 rounded">
+                                <button
+                                    onClick={() => deleteCategory(editingCategory.id)}
+                                    className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-md transition duration-300 ease-in-out"
+                                >
                                     Delete
                                 </button>
                             )}
-                            <button onClick={() => setIsModalOpen(false)} className="bg-gray-300 hover:bg-gray-400 text-black p-2 rounded">
+                            <button
+                                onClick={() => setIsModalOpen(false)}
+                                className="bg-gray-200 hover:bg-gray-300 text-gray-800 px-4 py-2 rounded-md transition duration-300 ease-in-out"
+                            >
                                 Cancel
                             </button>
                         </div>

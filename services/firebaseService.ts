@@ -1,15 +1,32 @@
 import { initializeApp } from 'firebase/app';
-import { getFirestore, collection, doc, addDoc, updateDoc, deleteDoc, getDocs, getDoc, writeBatch, query, where, orderBy, setDoc } from 'firebase/firestore';
+import {
+    getFirestore,
+    collection,
+    doc,
+    addDoc,
+    updateDoc,
+    deleteDoc,
+    getDocs,
+    getDoc,
+    writeBatch,
+    query,
+    where,
+    orderBy,
+    setDoc,
+    runTransaction,
+    DocumentReference,
+    increment
+} from 'firebase/firestore';
 import { Category, Todo } from '../types';
 
 const firebaseConfig = {
-    apiKey: "AIzaSyBYJaEn0p-FZWICr8GEwNY3XEwsxG5rX_8",
-    authDomain: "zero-kanban.firebaseapp.com",
-    projectId: "zero-kanban",
-    storageBucket: "zero-kanban.appspot.com",
-    messagingSenderId: "666567612805",
-    appId: "1:666567612805:web:2c5426b0c610bb54474cec",
-    measurementId: "G-SFQK88YMTW"
+    apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
+    authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+    projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+    storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+    messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+    appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
+    measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID
 };
 
 const app = initializeApp(firebaseConfig);
@@ -36,6 +53,20 @@ export const firebaseService = {
         return categories;
     },
 
+    getCategory: async (categoryId: string): Promise<Category | null> => {
+        const categoryDoc = await getDoc(doc(db, 'categories', categoryId));
+        if (!categoryDoc.exists()) return null;
+
+        const category = categoryDoc.data() as Category;
+        category.id = categoryDoc.id;
+
+        const todosCol = collection(db, `categories/${category.id}/todos`);
+        const todoSnapshot = await getDocs(query(todosCol, orderBy('position')));
+        category.todos = todoSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Todo));
+
+        return category;
+    },
+
     addCategory: async (title: string): Promise<string> => {
         if (!db) throw new Error('Firestore is not initialized');
         const categoriesCol = collection(db, 'categories');
@@ -47,6 +78,22 @@ export const firebaseService = {
 
     updateCategory: async (categoryId: string, title: string): Promise<void> => {
         await updateDoc(doc(db, 'categories', categoryId), { title });
+    },
+
+    updateCategoryPositions: async (categories: Category[]): Promise<void> => {
+        const batch = writeBatch(db);
+
+        categories.forEach((category, index) => {
+            const categoryRef = doc(db, 'categories', category.id);
+            batch.update(categoryRef, { position: index });
+        });
+
+        try {
+            await batch.commit();
+        } catch (error) {
+            console.error("Error updating category positions:", error);
+            throw error;
+        }
     },
 
     deleteCategory: async (categoryId: string): Promise<void> => {
@@ -72,12 +119,18 @@ export const firebaseService = {
         await batch.commit();
     },
 
-    addTodo: async (categoryId: string, todo: Omit<Todo, 'id' | 'position'>): Promise<string> => {
+    addTodo: async (categoryId: string, todo: Omit<Todo, 'id'>): Promise<Todo> => {
         const todosCol = collection(db, `categories/${categoryId}/todos`);
-        const todoSnapshot = await getDocs(todosCol);
-        const position = todoSnapshot.size;
-        const docRef = await addDoc(todosCol, { ...todo, position, categoryId });
-        return docRef.id;
+        const docRef = await addDoc(todosCol, todo);
+        const addedTodo = { ...todo, id: docRef.id };
+
+        // Update the todos count in the category document
+        const categoryRef = doc(db, 'categories', categoryId);
+        await updateDoc(categoryRef, {
+            todoCount: increment(1)
+        });
+
+        return addedTodo;
     },
 
     deleteTodo: async (categoryId: string, todoId: string): Promise<void> => {
@@ -99,95 +152,119 @@ export const firebaseService = {
 
     updateTodoPosition: async (result: any, newCategories: Category[]): Promise<void> => {
         const { source, destination, draggableId } = result;
-        const batch = writeBatch(db);
 
-        // Find the todo that was moved
-        const sourceCategory = newCategories.find(cat => cat.id === source.droppableId);
-        if (!sourceCategory) {
-            console.error("Source category not found", { source, newCategories });
-            return;
-        }
+        await runTransaction(db, async (transaction) => {
+            // Fetch the latest data from Firestore
+            const sourceCategory = await firebaseService.getCategory(source.droppableId);
+            const destCategory = await firebaseService.getCategory(destination.droppableId);
 
-        const movedTodo = sourceCategory.todos.find(todo => todo.id === draggableId);
-        if (!movedTodo) {
-            console.error("Moved todo not found", { draggableId, sourceTodos: sourceCategory.todos });
-            return;
-        }
+            if (!sourceCategory || !destCategory) {
+                throw new Error("Source or destination category not found");
+            }
 
-        const destCategory = newCategories.find(cat => cat.id === destination.droppableId);
-        if (!destCategory) {
-            console.error("Destination category not found", { destination, newCategories });
-            return;
-        }
+            const movedTodo = sourceCategory.todos.find(todo => todo.id === draggableId);
+            if (!movedTodo) {
+                throw new Error("Moved todo not found");
+            }
 
-        if (source.droppableId !== destination.droppableId) {
-            // Move between categories
-            const sourceTodoRef = doc(db, `categories/${source.droppableId}/todos`, draggableId);
-            const destTodoRef = doc(db, `categories/${destination.droppableId}/todos`, draggableId);
+            if (source.droppableId !== destination.droppableId) {
+                // Move between categories
+                const sourceTodoRef = doc(db, `categories/${source.droppableId}/todos`, draggableId);
+                const destTodoRef = doc(db, `categories/${destination.droppableId}/todos`, draggableId);
 
-            // Delete from source category
-            batch.delete(sourceTodoRef);
+                // Remove from source category
+                transaction.delete(sourceTodoRef);
 
-            // Add to destination category
-            batch.set(destTodoRef, {
-                ...movedTodo,
-                categoryId: destination.droppableId,
-                position: destination.index
-            });
-        }
+                // Add to destination category
+                transaction.set(destTodoRef, {
+                    ...movedTodo,
+                    categoryId: destination.droppableId,
+                    position: destination.index
+                });
 
-        // Update positions for all affected todos
-        newCategories.forEach((category) => {
-            category.todos.forEach((todo, index) => {
-                if (todo.position !== index || todo.categoryId !== category.id) {
-                    const todoRef = doc(db, `categories/${category.id}/todos`, todo.id);
-                    batch.update(todoRef, { position: index, categoryId: category.id });
-                }
-            });
+                // Update positions in source category
+                sourceCategory.todos = sourceCategory.todos.filter(todo => todo.id !== draggableId);
+                sourceCategory.todos.forEach((todo, index) => {
+                    const todoRef = doc(db, `categories/${source.droppableId}/todos`, todo.id);
+                    transaction.update(todoRef, { position: index });
+                });
+
+                // Update positions in destination category
+                destCategory.todos.splice(destination.index, 0, movedTodo);
+                destCategory.todos.forEach((todo, index) => {
+                    const todoRef = doc(db, `categories/${destination.droppableId}/todos`, todo.id);
+                    transaction.update(todoRef, { position: index });
+                });
+            } else {
+                // Move within the same category
+                sourceCategory.todos = sourceCategory.todos.filter(todo => todo.id !== draggableId);
+                sourceCategory.todos.splice(destination.index, 0, movedTodo);
+
+                // Update positions of all todos in the category
+                sourceCategory.todos.forEach((todo, index) => {
+                    const todoRef = doc(db, `categories/${source.droppableId}/todos`, todo.id);
+                    transaction.update(todoRef, { position: index });
+                });
+            }
+
+            // Update category documents with new todo arrays
+            const sourceCategoryRef = doc(db, 'categories', source.droppableId);
+            transaction.update(sourceCategoryRef, { todos: sourceCategory.todos });
+
+            if (source.droppableId !== destination.droppableId) {
+                const destCategoryRef = doc(db, 'categories', destination.droppableId);
+                transaction.update(destCategoryRef, { todos: destCategory.todos });
+            }
         });
-
-        try {
-            await batch.commit();
-        } catch (error) {
-            console.error("Error in batch commit:", error);
-            throw error;
-        }
     },
 
     updateTodo: async (todoId: string, updates: Partial<Todo>): Promise<void> => {
-        const categoriesSnapshot = await getDocs(collection(db, 'categories'));
-        let todoRef;
-        let oldCategoryId;
+        console.log('Firebase updateTodo called with:', { todoId, updates });
 
-        for (const categoryDoc of categoriesSnapshot.docs) {
-            const todoDoc = await getDoc(doc(db, `categories/${categoryDoc.id}/todos`, todoId));
-            if (todoDoc.exists()) {
-                todoRef = todoDoc.ref;
-                oldCategoryId = categoryDoc.id;
-                break;
+        await runTransaction(db, async (transaction) => {
+            // Find the current category of the todo
+            const categoriesSnapshot = await getDocs(collection(db, 'categories'));
+            let currentCategoryId: string | null = null;
+            let todoRef: DocumentReference | null = null;
+
+            for (const categoryDoc of categoriesSnapshot.docs) {
+                const todoDoc = await transaction.get(doc(db, `categories/${categoryDoc.id}/todos`, todoId));
+                if (todoDoc.exists()) {
+                    currentCategoryId = categoryDoc.id;
+                    todoRef = todoDoc.ref;
+                    break;
+                }
             }
-        }
 
-        if (!todoRef) {
-            throw new Error('Todo not found');
-        }
+            if (!todoRef || !currentCategoryId) {
+                throw new Error('Todo not found');
+            }
 
-        if (updates.categoryId && updates.categoryId !== oldCategoryId) {
-            // Todo is being moved to a new category
-            const batch = writeBatch(db);
+            const currentTodoData = (await transaction.get(todoRef)).data() as Todo;
 
-            // Delete from old category
-            batch.delete(todoRef);
+            if (updates.categoryId && updates.categoryId !== currentCategoryId) {
+                console.log('Moving todo to new category', { from: currentCategoryId, to: updates.categoryId });
 
-            // Add to new category
-            const newTodoRef = doc(db, `categories/${updates.categoryId}/todos`, todoId);
-            batch.set(newTodoRef, { ...updates, id: todoId });
+                // Delete from old category
+                transaction.delete(todoRef);
 
-            await batch.commit();
-        } else {
-            // Regular update
-            await updateDoc(todoRef, updates);
-        }
+                // Add to new category
+                const newTodoRef = doc(db, `categories/${updates.categoryId}/todos`, todoId);
+                transaction.set(newTodoRef, { ...currentTodoData, ...updates, id: todoId });
+
+                // Update todo counts
+                const oldCategoryRef = doc(db, 'categories', currentCategoryId);
+                const newCategoryRef = doc(db, 'categories', updates.categoryId);
+                transaction.update(oldCategoryRef, { todoCount: increment(-1) });
+                transaction.update(newCategoryRef, { todoCount: increment(1) });
+            } else {
+                console.log('Updating todo in current category', { categoryId: currentCategoryId });
+                // Regular update
+                transaction.update(todoRef, updates);
+            }
+        });
+
+        console.log('Firebase update completed');
     },
 
     searchTodos: async (searchTerm: string): Promise<Category[]> => {
@@ -202,3 +279,5 @@ export const firebaseService = {
         })).filter(category => category.todos.length > 0);
     }
 };
+
+export { db };

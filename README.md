@@ -2,6 +2,12 @@
 
 Zero Kanban Demo is a simple prototype of a Kanban board application built with Next.js, designed to showcase basic task management functionality.
 
+## Bugs
+
+- search filtering
+- update category todoitem in modal, not saved in db. no effect in ui
+
+
 ## 🌟 Features
 
 - 📋 Basic Kanban board layout

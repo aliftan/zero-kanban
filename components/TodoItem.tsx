@@ -1,28 +1,13 @@
 import React, { useState } from "react";
+import { Todo, Category } from '../types';
 
-interface TodoItemProps {
-    id: string;
-    content: string;
-    isCompleted: boolean;
-    description?: string;
-    dueDate?: string;
-    tags?: string[];
+interface TodoItemProps extends Todo {
     categoryId: string;
-    categories: { id: string; title: string }[];
+    categories: Category[];
     onComplete: (id: string) => void;
     onUpdate: (id: string, updates: Partial<Todo>) => void;
     onDelete: (id: string) => void;
     showAlert: (message: string, type: "success" | "error") => void;
-}
-
-export interface Todo {
-    id: string;
-    content: string;
-    isCompleted: boolean;
-    description?: string;
-    dueDate?: string;
-    tags?: string[];
-    categoryId: string;
 }
 
 const TodoItem: React.FC<TodoItemProps> = ({
@@ -33,6 +18,7 @@ const TodoItem: React.FC<TodoItemProps> = ({
     dueDate,
     tags,
     categoryId,
+    position,
     categories,
     onComplete,
     onUpdate,
@@ -71,13 +57,16 @@ const TodoItem: React.FC<TodoItemProps> = ({
                 .filter((tag) => tag !== ""),
             categoryId: editCategoryId,
             isCompleted: editIsCompleted,
+            position: position,
         });
         closeModal();
+        showAlert("Todo updated successfully", "success");
     };
 
     const handleDelete = () => {
         onDelete(id);
         closeModal();
+        showAlert("Todo deleted successfully", "success");
     };
 
     return (
@@ -103,13 +92,10 @@ const TodoItem: React.FC<TodoItemProps> = ({
                 <div className="flex items-center mb-2">
                     <div
                         className={`w-6 h-6 border-2 rounded-full mr-3 flex items-center justify-center cursor-pointer transition-colors duration-200 ${isCompleted
-                                ? "bg-green-500 border-green-500"
-                                : "border-gray-300 hover:border-indigo-500"
+                            ? "bg-green-500 border-green-500"
+                            : "border-gray-300 hover:border-indigo-500"
                             }`}
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            handleComplete(e);
-                        }}
+                        onClick={handleComplete}
                     >
                         {isCompleted && (
                             <svg
@@ -161,8 +147,8 @@ const TodoItem: React.FC<TodoItemProps> = ({
                                     <span
                                         key={index}
                                         className={`px-2 py-1 rounded-full text-xs ${isCompleted
-                                                ? "bg-green-200 text-green-800"
-                                                : "bg-indigo-100 text-indigo-800"
+                                            ? "bg-green-200 text-green-800"
+                                            : "bg-indigo-100 text-indigo-800"
                                             }`}
                                     >
                                         {tag}

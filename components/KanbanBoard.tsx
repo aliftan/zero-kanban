@@ -1,14 +1,10 @@
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { DragDropContext, Droppable, Draggable, DropResult } from 'react-beautiful-dnd';
 import Alert from './Alert';
-import TodoItem, { Todo } from './TodoItem';
-
-interface Category {
-    id: string;
-    title: string;
-    todos: Todo[];
-}
-
+import TodoItem from './TodoItem';
+import { firebaseService } from '../services/firebaseService';
+import { Category, Todo } from '../types';
+import ErrorBoundary from './ErrorBoundary';
 
 const KanbanBoard: React.FC = () => {
     const [categories, setCategories] = useState<Category[]>([]);
@@ -21,6 +17,20 @@ const KanbanBoard: React.FC = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [showAddTodo, setShowAddTodo] = useState<{ [key: string]: boolean }>({});
     const inputRef = useRef<HTMLInputElement>(null);
+
+    useEffect(() => {
+        fetchCategories();
+    }, []);
+
+    const fetchCategories = async () => {
+        try {
+            const fetchedCategories = await firebaseService.getCategories();
+            setCategories(fetchedCategories);
+        } catch (error) {
+            console.error("Error fetching categories:", error);
+            showAlert('Failed to fetch categories', 'error');
+        }
+    };
 
     const toggleAddTodo = (categoryId: string) => {
         setShowAddTodo(prev => ({ ...prev, [categoryId]: !prev[categoryId] }));
@@ -43,48 +53,46 @@ const KanbanBoard: React.FC = () => {
         })).filter(category => category.todos.length > 0);
     }, [categories, searchTerm]);
 
-    const onDragEnd = (result: DropResult) => {
+    const onDragEnd = async (result: DropResult) => {
         const { source, destination } = result;
 
         if (!destination) return;
 
+        const newCategories = Array.from(categories);
+        const sourceCategory = newCategories.find(cat => cat.id === source.droppableId);
+        const destCategory = newCategories.find(cat => cat.id === destination.droppableId);
+
+        if (!sourceCategory || !destCategory) return;
+
         if (source.droppableId !== destination.droppableId) {
-            const sourceCategory = categories.find(cat => cat.id === source.droppableId);
-            const destCategory = categories.find(cat => cat.id === destination.droppableId);
-            if (sourceCategory && destCategory) {
-                const sourceTodos = [...sourceCategory.todos];
-                const destTodos = [...destCategory.todos];
-                const [removed] = sourceTodos.splice(source.index, 1);
-                destTodos.splice(destination.index, 0, removed);
+            const [movedTodo] = sourceCategory.todos.splice(source.index, 1);
+            movedTodo.categoryId = destination.droppableId;
+            destCategory.todos.splice(destination.index, 0, movedTodo);
 
-                setCategories(
-                    categories.map(cat => {
-                        if (cat.id === source.droppableId) {
-                            return { ...cat, todos: sourceTodos };
-                        }
-                        if (cat.id === destination.droppableId) {
-                            return { ...cat, todos: destTodos };
-                        }
-                        return cat;
-                    })
-                );
-            }
+            // Update positions
+            sourceCategory.todos.forEach((todo, index) => {
+                todo.position = index;
+            });
+            destCategory.todos.forEach((todo, index) => {
+                todo.position = index;
+            });
         } else {
-            const category = categories.find(cat => cat.id === source.droppableId);
-            if (category) {
-                const copiedTodos = [...category.todos];
-                const [removed] = copiedTodos.splice(source.index, 1);
-                copiedTodos.splice(destination.index, 0, removed);
+            const [reorderedItem] = sourceCategory.todos.splice(source.index, 1);
+            sourceCategory.todos.splice(destination.index, 0, reorderedItem);
 
-                setCategories(
-                    categories.map(cat => {
-                        if (cat.id === source.droppableId) {
-                            return { ...cat, todos: copiedTodos };
-                        }
-                        return cat;
-                    })
-                );
-            }
+            // Update positions
+            sourceCategory.todos.forEach((todo, index) => {
+                todo.position = index;
+            });
+        }
+
+        setCategories(newCategories);
+
+        try {
+            await firebaseService.updateTodoPosition(result, newCategories);
+        } catch (error) {
+            console.error("Error updating todo position:", error);
+            showAlert('Failed to update todo position', 'error');
         }
     };
 
@@ -94,27 +102,38 @@ const KanbanBoard: React.FC = () => {
         setIsModalOpen(true);
     };
 
-    const openEditModal = (category: Category) => {
+    const openEditModal = (e: React.MouseEvent, category: Category) => {
+        e.stopPropagation(); // Add this line to prevent event propagation
         setModalMode('edit');
         setEditingCategory(category);
         setNewCategoryTitle(category.title);
         setIsModalOpen(true);
     };
 
-    const handleModalSubmit = () => {
+    const handleModalSubmit = async () => {
         if (newCategoryTitle.trim() === '') return;
 
-        if (modalMode === 'add') {
-            setCategories([
-                ...categories,
-                { id: Date.now().toString(), title: newCategoryTitle, todos: [] },
-            ]);
-            showAlert('Board created successfully!', 'success');
-        } else if (editingCategory) {
-            setCategories(categories.map(cat =>
-                cat.id === editingCategory.id ? { ...cat, title: newCategoryTitle } : cat
-            ));
-            showAlert('Board updated successfully!', 'success');
+        try {
+            if (modalMode === 'add') {
+                const newCategoryId = await firebaseService.addCategory(newCategoryTitle);
+                const newCategory = {
+                    id: newCategoryId,
+                    title: newCategoryTitle,
+                    todos: [],
+                    position: categories.length // Add this line
+                };
+                setCategories([...categories, newCategory]);
+                showAlert('Board created successfully!', 'success');
+            } else if (editingCategory) {
+                await firebaseService.updateCategory(editingCategory.id, newCategoryTitle);
+                setCategories(categories.map(cat =>
+                    cat.id === editingCategory.id ? { ...cat, title: newCategoryTitle } : cat
+                ));
+                showAlert('Board updated successfully!', 'success');
+            }
+        } catch (error) {
+            console.error("Error handling category:", error);
+            showAlert('Failed to handle category', 'error');
         }
 
         setIsModalOpen(false);
@@ -122,88 +141,125 @@ const KanbanBoard: React.FC = () => {
         setEditingCategory(null);
     };
 
-    const deleteCategory = (categoryId: string) => {
-        setCategories(categories.filter(cat => cat.id !== categoryId));
-        setIsModalOpen(false);
-        setEditingCategory(null);
-        showAlert('Board deleted successfully!', 'success');
+    const deleteCategory = async (categoryId: string) => {
+        try {
+            await firebaseService.deleteCategory(categoryId);
+            setCategories(categories.filter(cat => cat.id !== categoryId));
+            setIsModalOpen(false);
+            setEditingCategory(null);
+            showAlert('Board deleted successfully!', 'success');
+        } catch (error) {
+            console.error("Error deleting category:", error);
+            showAlert('Failed to delete board', 'error');
+        }
     };
 
-    const handleTodoComplete = (categoryId: string, todoId: string) => {
-        setCategories(categories.map(cat => {
-            if (cat.id === categoryId) {
-                return {
-                    ...cat,
-                    todos: cat.todos.map(todo =>
-                        todo.id === todoId ? { ...todo, isCompleted: !todo.isCompleted } : todo
-                    )
-                };
+    const handleTodoComplete = async (categoryId: string, todoId: string) => {
+        try {
+            const category = categories.find(cat => cat.id === categoryId);
+            if (category) {
+                const todo = category.todos.find(t => t.id === todoId);
+                if (todo) {
+                    const updatedTodo = { ...todo, isCompleted: !todo.isCompleted };
+                    await firebaseService.updateTodo(todoId, updatedTodo);
+                    setCategories(categories.map(cat => {
+                        if (cat.id === categoryId) {
+                            return {
+                                ...cat,
+                                todos: cat.todos.map(t => t.id === todoId ? updatedTodo : t)
+                            };
+                        }
+                        return cat;
+                    }));
+                }
             }
-            return cat;
-        }));
+        } catch (error) {
+            console.error("Error completing todo:", error);
+            showAlert('Failed to update todo status', 'error');
+        }
     };
 
-    const handleTodoUpdate = (currentCategoryId: string, todoId: string, updates: Partial<Todo>) => {
-        setCategories(categories.map(cat => {
-            if (cat.id === currentCategoryId) {
-                const updatedTodos = cat.todos.map(todo =>
-                    todo.id === todoId ? { ...todo, ...updates } : todo
-                );
+    const handleTodoUpdate = async (currentCategoryId: string, todoId: string, updates: Partial<Todo>) => {
+        try {
+            await firebaseService.updateTodo(todoId, updates);
+
+            setCategories(prevCategories => {
+                const newCategories = [...prevCategories];
+                const currentCategoryIndex = newCategories.findIndex(cat => cat.id === currentCategoryId);
+                const todoIndex = newCategories[currentCategoryIndex].todos.findIndex(todo => todo.id === todoId);
 
                 if (updates.categoryId && updates.categoryId !== currentCategoryId) {
-                    // Remove the todo from the current category
-                    return { ...cat, todos: updatedTodos.filter(todo => todo.id !== todoId) };
+                    // Move todo to new category
+                    const todo = newCategories[currentCategoryIndex].todos.splice(todoIndex, 1)[0];
+                    const updatedTodo = { ...todo, ...updates };
+                    const newCategoryIndex = newCategories.findIndex(cat => cat.id === updates.categoryId);
+                    newCategories[newCategoryIndex].todos.push(updatedTodo);
+                } else {
+                    // Update todo in current category
+                    newCategories[currentCategoryIndex].todos[todoIndex] = {
+                        ...newCategories[currentCategoryIndex].todos[todoIndex],
+                        ...updates
+                    };
                 }
 
-                return { ...cat, todos: updatedTodos };
-            } else if (updates.categoryId && updates.categoryId === cat.id) {
-                // Add the todo to the new category
-                const movedTodo = categories
-                    .find(c => c.id === currentCategoryId)?.todos
-                    .find(t => t.id === todoId);
-                if (movedTodo) {
-                    return { ...cat, todos: [...cat.todos, { ...movedTodo, ...updates }] };
+                return newCategories;
+            });
+
+            showAlert('Todo updated successfully', 'success');
+        } catch (error) {
+            console.error("Error updating todo:", error);
+            showAlert('Failed to update todo', 'error');
+        }
+    };
+
+    const handleTodoDelete = async (categoryId: string, todoId: string) => {
+        try {
+            await firebaseService.deleteTodo(categoryId, todoId);
+            setCategories(categories.map(cat => {
+                if (cat.id === categoryId) {
+                    return {
+                        ...cat,
+                        todos: cat.todos.filter(todo => todo.id !== todoId)
+                    };
                 }
-            }
-            return cat;
-        }));
+                return cat;
+            }));
+        } catch (error) {
+            console.error("Error deleting todo:", error);
+            showAlert('Failed to delete todo', 'error');
+        }
     };
 
-    const handleTodoDelete = (categoryId: string, todoId: string) => {
-        setCategories(categories.map(cat => {
-            if (cat.id === categoryId) {
-                return {
-                    ...cat,
-                    todos: cat.todos.filter(todo => todo.id !== todoId)
-                };
-            }
-            return cat;
-        }));
-    };
-
-    const addTodo = (categoryId: string) => {
+    const addTodo = async (categoryId: string) => {
         if (newTodoContent.trim() === '') return;
 
-        setCategories(categories.map(cat => {
-            if (cat.id === categoryId) {
-                return {
-                    ...cat,
-                    todos: [
-                        {
-                            id: Date.now().toString(),
-                            content: newTodoContent,
-                            isCompleted: false,
-                            categoryId: categoryId,
-                        },
-                        ...cat.todos,
-                    ],
-                };
-            }
-            return cat;
-        }));
-        setNewTodoContent('');
-        setShowAddTodo(prev => ({ ...prev, [categoryId]: false }));
-        showAlert('Todo added successfully!', 'success');
+        try {
+            const category = categories.find(cat => cat.id === categoryId);
+            if (!category) return;
+
+            const newTodo: Omit<Todo, 'id'> = {
+                content: newTodoContent,
+                isCompleted: false,
+                categoryId: categoryId,
+                position: category.todos.length, // Add this line
+            };
+            const newTodoId = await firebaseService.addTodo(categoryId, newTodo);
+            setCategories(categories.map(cat => {
+                if (cat.id === categoryId) {
+                    return {
+                        ...cat,
+                        todos: [{ ...newTodo, id: newTodoId }, ...cat.todos],
+                    };
+                }
+                return cat;
+            }));
+            setNewTodoContent('');
+            setShowAddTodo(prev => ({ ...prev, [categoryId]: false }));
+            showAlert('Todo added successfully!', 'success');
+        } catch (error) {
+            console.error("Error adding todo:", error);
+            showAlert('Failed to add todo', 'error');
+        }
     };
 
     return (
@@ -235,7 +291,12 @@ const KanbanBoard: React.FC = () => {
                                         className="bg-white rounded-lg shadow-md p-4 min-w-[350px] flex flex-col h-full"
                                     >
                                         <div className="flex justify-between items-center mb-4">
-                                            <h2 className="font-semibold text-xl text-gray-800">{category.title}</h2>
+                                            <h2
+                                                className="font-semibold text-xl text-gray-800 cursor-pointer"
+                                                onClick={(e) => openEditModal(e, category)}
+                                            >
+                                                {category.title}
+                                            </h2>
                                             <button
                                                 onClick={() => toggleAddTodo(category.id)}
                                                 className="w-6 h-6 border border-indigo-600 rounded flex items-center justify-center text-indigo-600 hover:bg-indigo-100 focus:outline-none transition-colors duration-200"
@@ -300,8 +361,7 @@ const KanbanBoard: React.FC = () => {
                                                     )}
                                                 </Draggable>
                                             ))}
-                                        </div>
-                                        {provided.placeholder}
+                                        </div>{provided.placeholder}
                                     </div>
                                 )}
                             </Droppable>

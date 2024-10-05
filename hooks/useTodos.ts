@@ -67,8 +67,6 @@ export const useTodos = (categories: Category[], setCategories: React.Dispatch<R
 
                 return newCategories;
             });
-
-            console.log('Todo updated successfully');
         } catch (error) {
             console.error("Error updating todo:", error);
         }
@@ -103,7 +101,6 @@ export const useTodos = (categories: Category[], setCategories: React.Dispatch<R
                 position: category.todos.length,
             };
             const addedTodo = await firebaseService.addTodo(categoryId, newTodo);
-            console.log('Todo added to Firebase:', addedTodo);
 
             setCategories(prevCategories => prevCategories.map(cat => {
                 if (cat.id === categoryId) {

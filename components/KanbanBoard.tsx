@@ -9,7 +9,7 @@ import Alert from './Alert';
 import { useCategories } from '../hooks/useCategories';
 import { useTodos } from '../hooks/useTodos';
 
-const KanbanBoard: React.FC = () => {
+export const KanbanBoard: React.FC = () => {
     const [isClient, setIsClient] = useState(false);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [modalMode, setModalMode] = useState<'add' | 'edit'>('add');
@@ -23,7 +23,6 @@ const KanbanBoard: React.FC = () => {
         addCategory,
         updateCategory,
         deleteCategory,
-        updateCategoryPositions,
         refreshCategories
     } = useCategories();
     const { handleTodoComplete, handleTodoDelete, addTodo } = useTodos(categories, setCategories);
@@ -77,66 +76,38 @@ const KanbanBoard: React.FC = () => {
     };
 
     const onDragEnd = async (result: DropResult) => {
-        const { source, destination, type, draggableId } = result;
+        const { source, destination, draggableId } = result;
 
         if (!destination) return;
 
-        if (type === 'COLUMN') {
-            // Handling category drag
-            const newCategories = Array.from(categories);
-            const [reorderedCategory] = newCategories.splice(source.index, 1);
-            newCategories.splice(destination.index, 0, reorderedCategory);
+        // Only handle todo drag, category drag is removed
+        const newCategories = [...categories];
+        const sourceCategory = newCategories.find(cat => cat.id === source.droppableId);
+        const destCategory = newCategories.find(cat => cat.id === destination.droppableId);
 
-            // Update positions
-            newCategories.forEach((category, index) => {
-                category.position = index;
-            });
+        if (!sourceCategory || !destCategory) return;
 
-            try {
-                await updateCategoryPositions(newCategories);
-                setCategories(newCategories);
-                showAlert('Board positions updated successfully', 'success');
-            } catch (error) {
-                console.error("Error updating category positions:", error);
-                showAlert('Failed to update board positions', 'error');
-            }
+        const [movedTodo] = sourceCategory.todos.splice(source.index, 1);
+
+        if (source.droppableId !== destination.droppableId) {
+            // Move between categories
+            destCategory.todos.splice(destination.index, 0, { ...movedTodo, categoryId: destination.droppableId });
         } else {
-            // Handling todo drag
-            const newCategories = [...categories];
-            const sourceCategory = newCategories.find(cat => cat.id === source.droppableId);
-            const destCategory = newCategories.find(cat => cat.id === destination.droppableId);
+            // Move within the same category
+            sourceCategory.todos.splice(destination.index, 0, movedTodo);
+        }
 
-            if (!sourceCategory || !destCategory) return;
+        setCategories(newCategories);
 
-            const [movedTodo] = sourceCategory.todos.splice(source.index, 1);
+        try {
+            await firebaseService.updateTodoPosition(result, newCategories);
+            showAlert('Todo position updated successfully', 'success');
+        } catch (error) {
+            console.error("Error updating todo position:", error);
+            showAlert('Failed to update todo position', 'error');
 
-            if (source.droppableId !== destination.droppableId) {
-                // Move between categories
-                destCategory.todos.splice(destination.index, 0, { ...movedTodo, categoryId: destination.droppableId });
-            } else {
-                // Move within the same category
-                sourceCategory.todos.splice(destination.index, 0, movedTodo);
-            }
-
-            // Update positions
-            newCategories.forEach(category => {
-                category.todos.forEach((todo, index) => {
-                    todo.position = index;
-                });
-            });
-
-            setCategories(newCategories);
-
-            try {
-                await firebaseService.updateTodoPosition(result, newCategories);
-                showAlert('Todo position updated successfully', 'success');
-            } catch (error) {
-                console.error("Error updating todo position:", error);
-                showAlert('Failed to update todo position', 'error');
-
-                // Revert the local state if the database update fails
-                setCategories(categories);
-            }
+            // Revert the local state if the database update fails
+            setCategories(categories);
         }
     };
 
@@ -220,5 +191,3 @@ const KanbanBoard: React.FC = () => {
         </div>
     );
 };
-
-export default KanbanBoard;

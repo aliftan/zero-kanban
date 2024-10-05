@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { Todo, Category } from '../types';
 import ItemModal from './ItemModal';
-import { DraggableProvided } from 'react-beautiful-dnd';
+import { DraggableProvided, DraggableStateSnapshot } from 'react-beautiful-dnd';
 
 interface TodoItemProps {
     todo: Todo;
@@ -12,6 +12,7 @@ interface TodoItemProps {
     onDelete: (categoryId: string, todoId: string) => Promise<void>;
     showAlert: (message: string, type: 'success' | 'error') => void;
     provided: DraggableProvided;
+    isDragging: boolean;
 }
 
 const TodoItem: React.FC<TodoItemProps> = ({
@@ -23,6 +24,7 @@ const TodoItem: React.FC<TodoItemProps> = ({
     onDelete,
     showAlert,
     provided,
+    isDragging,
 }) => {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editContent, setEditContent] = useState(todo.content);
@@ -93,6 +95,7 @@ const TodoItem: React.FC<TodoItemProps> = ({
                     transition-all 
                     duration-200 
                     cursor-pointer 
+                    ${isDragging ? 'opacity-50' : 'opacity-100'}
                     ${todo.isCompleted
                         ? "bg-green-100 border-green-300 hover:border-green-400"
                         : "bg-white border-slate-200 hover:border-indigo-200"

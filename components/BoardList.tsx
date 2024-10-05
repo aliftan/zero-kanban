@@ -1,5 +1,4 @@
 import React from 'react';
-import { Droppable, DroppableProvided } from 'react-beautiful-dnd';
 import { Category, Todo } from '../types';
 import BoardColumn from './BoardColumn';
 
@@ -35,31 +34,21 @@ const BoardList: React.FC<BoardListProps> = ({
         : categories;
 
     return (
-        <Droppable droppableId="all-columns" direction="horizontal" type="COLUMN">
-            {(provided: DroppableProvided) => (
-                <div
-                    {...provided.droppableProps}
-                    ref={provided.innerRef}
-                    className="flex h-full space-x-6 p-6 overflow-x-auto"
-                >
-                    {filteredCategories.map((category, index) => (
-                        <BoardColumn
-                            key={category.id}
-                            category={category}
-                            allCategories={categories}
-                            index={index}
-                            openEditModal={openEditModal}
-                            handleTodoComplete={handleTodoComplete}
-                            handleTodoUpdate={handleTodoUpdate}
-                            handleTodoDelete={handleTodoDelete}
-                            addTodo={addTodo}
-                            showAlert={showAlert}
-                        />
-                    ))}
-                    {provided.placeholder}
-                </div>
-            )}
-        </Droppable>
+        <div className="flex h-full space-x-6 p-6 overflow-x-auto">
+            {filteredCategories.map((category) => (
+                <BoardColumn
+                    key={category.id}
+                    category={category}
+                    allCategories={categories}
+                    openEditModal={openEditModal}
+                    handleTodoComplete={handleTodoComplete}
+                    handleTodoUpdate={handleTodoUpdate}
+                    handleTodoDelete={handleTodoDelete}
+                    addTodo={addTodo}
+                    showAlert={showAlert}
+                />
+            ))}
+        </div>
     );
 };
 
